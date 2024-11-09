@@ -1,0 +1,1 @@
+uint32_t readMatrix(uint8_t buttons[], uint8_t edges[], uint8_t menu);

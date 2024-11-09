@@ -1,8 +1,8 @@
-# Install script for directory: G:/proyecto/codigo/MainBoard
+# Install script for directory: E:/proyecto/codigo/MainBoard
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "C:/Program Files (x86)/HID")
+  set(CMAKE_INSTALL_PREFIX "C:/Program Files (x86)/MainBoard")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 
@@ -39,7 +39,7 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
-  include("G:/proyecto/codigo/MainBoard/build/pico-sdk/cmake_install.cmake")
+  include("E:/proyecto/codigo/MainBoard/build/pico-sdk/cmake_install.cmake")
 
 endif()
 
@@ -51,5 +51,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "G:/proyecto/codigo/MainBoard/build/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "E:/proyecto/codigo/MainBoard/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

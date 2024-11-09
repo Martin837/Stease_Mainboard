@@ -70,7 +70,7 @@ int readPin(uint8_t pin, uint8_t mode){
 
 void writePin(uint8_t pin, uint8_t mode, uint8_t value){
     if(mode == 0){
-        if(!value){
+        if(value){
             sio_hw->gpio_out |= 1<<pin;
             return;
         }
