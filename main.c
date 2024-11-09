@@ -40,9 +40,8 @@ void LCD_menu();
 
 uint8_t port_avail = 1;
 
-uint32_t hid_buttons = 0, last_hid_buttons = 0; // HID
+uint32_t hid_buttons = 0, last_hid_buttons = 0, trigger = 0, db_time = 10e3; // HID
 uint8_t buttons[15] = {0};
-uint8_t matrix_stage = 0;
 
 int tiempo_envio_trama = 0; // Mem
 
@@ -250,10 +249,15 @@ int main(void)
     */
     //-------------Matriz-------------
     if(hid_buttons != last_hid_buttons){
-      if(hid_buttons)
+      if(hid_buttons){
         edge = 1;
+        trigger = timer_hw->timelr;
+      }
 
       last_hid_buttons = hid_buttons;
+    }
+    else{
+      edge = 0;
     }
 
     if(buttons[1] && !menu && edge) updateButtons(1);
@@ -269,15 +273,12 @@ int main(void)
     if(buttons[11] && edge) updateButtons(11);
     if(buttons[12] && edge) updateButtons(12);
 
-    edge = 0;
-
 
     //-------------Matriz-------------
     confi();
-    cali();
-    memo();
+    //cali();
+    //memo();
     //-------------LCD-------------
-
 
     if((timer_hw->timelr > (last_lcd + 2e6)) && reset == 1 && !menu){
       port_avail = 0;
@@ -317,7 +318,9 @@ void SysTick_Handler(void)
 
   tiempo_envio_trama++;
 
-  hid_buttons = readMatrix(buttons, edges, menu);
+  if((trigger + db_time) < timer_hw->timelr){
+    hid_buttons = readMatrix(buttons, edges, menu); 
+  }
 
   static int t = 0, angle1 = 0;
   if (t++ > 100 && port_avail)
@@ -363,6 +366,7 @@ void LCD_menu()
     lcd_string(bbb);
     char *ccc[] = {"juego", "sensores"};
     lcd_set_cursor(0, 8);
+    datos = MARTIN;
     if (datos != last_datos)
     {
       last_datos = datos;
@@ -383,6 +387,7 @@ void LCD_menu()
     lcd_string(eee);
     change_lcd = 0;
     port_avail = 1;
+    return;
   }
 
   if (modo_mem && change_lcd)
@@ -438,6 +443,7 @@ void LCD_menu()
     change_lcd = 0;
     port_avail = 1;
   }
+  return;
 }
 
 void beginUart()
@@ -591,77 +597,81 @@ void cali()
     return;
 }
 
+uint32_t suelto_con = 0, total_con = 0;
+
 void confi()
 {
   actual_con = buttons[6];
-  if (anterior_con != actual_con && actual_con == 1)
-  {
+  if(anterior_con != actual_con && actual_con == 1){
+      anterior_con = actual_con;
+      apreto_con = timer_hw->timelr;
+  }
+
+  if(anterior_con != actual_con && actual_con == 0){
+    suelto_con = timer_hw->timelr;
     anterior_con = actual_con;
-    apreto_con = timer_hw->timelr;
-  }
-  else if (anterior_con != actual_con && actual_con == 0){
-    anterior_con = actual_con;
-    apreto_con = 0;
-  }
+    total_con = suelto_con - apreto_con;
+}
 
-  tiempo_actual_con = timer_hw->timelr;
 
-  if ((tiempo_actual_con - apreto_con) >= 5e6 && !modo_conf && (buttons[6] || veces_con != 0))
+tiempo_actual_con = timer_hw->timelr;
+
+if(total_con >= 5e6 && !modo_conf)
+{
+  if(veces_con != 5)
   {
-    if (veces_con != 10)
+    if(tiempo_actual_con >= (tiempo_anterior_con + 1e6))
     {
-      if (tiempo_actual_con >= (tiempo_anterior_con + 1e6))
-      {
-        sio_hw->gpio_togl |= 1 << led;
-        sio_hw->gpio_togl |= 1 << led1;
-        sio_hw->gpio_togl |= 1 << led2;
-        tiempo_anterior_con = tiempo_actual_con;
-        veces_con++;
-      }
-    }
-
-    else if (veces_con >= 10)
-    {
-      modo_conf = 1;
-      menu = 1;
-      apreto_con = 0;
-      veces_con = 0;
-      change_lcd = 1;
+      sio_hw->gpio_togl |= 1 << led;
+      tiempo_anterior_con = tiempo_actual_con;
+      veces_con++;
     }
   }
-
-  else if ((tiempo_actual_con - apreto_con) >= 5e6 && modo_conf && (buttons[6] || veces_con != 0))
+    
+  else if(veces_con >= 5)
   {
-    if (veces_con != 10)
-    {
-      if (tiempo_actual_con >= (tiempo_anterior_con + 1e6))
-      {
-        sio_hw->gpio_togl |= 1 << led;
-        sio_hw->gpio_togl |= 1 << led1;
-        sio_hw->gpio_togl |= 1 << led2;
-        tiempo_anterior_con = tiempo_actual_con;
-        veces_con++;
-      }
-    }
-    else if (veces_con >= 10)
-    {
-      modo_conf = 0;
-      menu = 0;
-      apreto_con = 0;
-      veces_con = 0;
-      change_lcd = 1;
-    }
-  }
-  else
+    modo_conf = 1;
+    total_con = 0;
+    veces_con = 0;
+    change_lcd = 1;
+    menu = 1;
     return;
+  }
+}
+
+else if(total_con >= 5e6 && modo_conf)
+{
+    if(veces_con != 5)
+    {
+        if(tiempo_actual_con >= (tiempo_anterior_con + 1e6))
+        {
+            sio_hw->gpio_togl |= 1 << led;
+            tiempo_anterior_con = tiempo_actual_con;
+            veces_con++;
+        }
+    }
+    else if(veces_con >= 5)
+    {
+        modo_conf = 0;
+        total_con = 0;
+        veces_con = 0;
+        change_lcd = 1;
+        menu = 0;
+        return;
+    }
+}
   // TODO torque control
 
-  if (buttons[1])
+  if (buttons[1] && edge)
   {
-    if (MARTIN == 1)
+    if (MARTIN == 1){
       MARTIN = 0;
-    else
+      change_lcd = 1;
+    }
+    else{
       MARTIN = 1;
+      change_lcd = 1;
+    }
   }
 }
 
