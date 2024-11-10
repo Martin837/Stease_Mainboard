@@ -87,7 +87,7 @@ uint32_t last_update = 0; // LCD
 // menus
 uint8_t menu = 0, modo_mem = 0, datos = 0, torque = 50, last_datos = 1, last_torque = 0; // LCD
 // menu: is a menu active? if it is then buttons can't be displayed.
-uint8_t linea = 2, change = 1;                                       // modo mem //LCD
+uint8_t linea = 0, change = 1;                                       // modo mem //LCD
 char *mem_strings[] = {"Inicio", "Fin", "Repeticion", "Salir", "<"}; // LCD
 
 uint32_t suelto_con = 0, total_con = 0, suelto_cal = 0, total_cal = 0, suelto_mem = 0, total_mem = 0;
@@ -280,7 +280,7 @@ int main(void)
     //-------------Matriz-------------
     confi();
     cali();
-    //memo();
+    memo();
     //-------------LCD-------------
 
     if((timer_hw->timelr > (last_lcd + 2e6)) && reset == 1 && !menu){
@@ -358,7 +358,7 @@ void LCD_menu(){
     port_avail = 1;
   }
 
-  if ((modo_conf && change_lcd) || (torque != last_torque))
+  if ((modo_conf && change_lcd) || ((torque != last_torque) && modo_conf))
   {
     lcd_clear();
     // sleep_ms(30);
@@ -733,8 +733,8 @@ void memo(){
       return;
     }
   }
-
-  if (tiempo_envio_trama >= 1000)
+  
+  if (tiempo_envio_trama >= 1000 && !mandar_trama)
   {
     tiempo_envio_trama = 0;
 
@@ -850,19 +850,19 @@ void memo(){
       strcat(trama, aux);
     }
 
-    if (menu && buttons[9] && linea == 0)
+    if (menu && buttons[9] && linea == 0 && edge)
       strcat(trama, "-R1");
 
-    if (menu && buttons[9] && linea == 0)
+    if (menu && buttons[9] && linea == 0 && edge)
       strcat(trama, "-R0");
 
-    if (menu && buttons[9] && linea == 0)
+    if (menu && buttons[9] && linea == 0 && edge)
     {
       strcat(trama, "-S1");
       replay = 1;
     }
 
-    if (menu && buttons[9] && linea == 0)
+    if (menu && buttons[9] && linea == 0 && edge)
     {
       strcat(trama, "-S0");
       replay = 0;
@@ -870,11 +870,13 @@ void memo(){
     strcat(trama, "?");
     mandar_trama = 1;
   }
+  else if(tiempo_envio_trama >= 1000 && mandar_trama){
+    tiempo_envio_trama = 0;
+  }
 
   if (mandar_trama == 1)
   {
-    if (uart0_hw->fr & UART_UARTFR_TXFE_BITS)
-    {                            // Verifico que el puerto de tx esta ok
+    if (uart0_hw->fr & UART_UARTFR_TXFE_BITS){ // Verifico que el puerto de tx esta ok
       uart0_hw->dr = trama[num]; // Manda el caracter correspondiente de la trama
 
       if (trama[num] != '?')
@@ -885,9 +887,11 @@ void memo(){
       { // Si estamos en el final, reseteo todo
         num = 0;
         mandar_trama = 0;
+        
         return;
       }
     }
+    else return;
   }
   return;
 }
