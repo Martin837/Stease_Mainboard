@@ -89,6 +89,9 @@ uint8_t menu = 0, modo_mem = 0, datos = 0, torque = 50, last_datos = 1, last_tor
 // menu: is a menu active? if it is then buttons can't be displayed.
 uint8_t linea = 2, change = 1;                                       // modo mem //LCD
 char *mem_strings[] = {"Inicio", "Fin", "Repeticion", "Salir", "<"}; // LCD
+
+uint32_t suelto_con = 0, total_con = 0, suelto_cal = 0, total_cal = 0, suelto_mem = 0, total_mem = 0;
+
 //*-------------Global Variables-------------*/
 
 //*------------- MAIN -------------*/
@@ -276,7 +279,7 @@ int main(void)
 
     //-------------Matriz-------------
     confi();
-    //cali();
+    cali();
     //memo();
     //-------------LCD-------------
 
@@ -343,8 +346,7 @@ void SysTick_Handler(void)
 }
 //*------------- SYSTICK -------------*/
 
-void LCD_menu()
-{
+void LCD_menu(){
   if (modo_cal)
   {
     lcd_clear();
@@ -446,8 +448,7 @@ void LCD_menu()
   return;
 }
 
-void beginUart()
-{
+void beginUart(){
   uart0_hw->ibrd = 813;
   uart0_hw->fbrd = 52;
   // Largo de la palabra
@@ -475,8 +476,7 @@ void beginUart()
   return;
 }
 
-void updateButtons(uint8_t btn)
-{
+void updateButtons(uint8_t btn){
   port_avail = 0;
   last_lcd = timer_hw->timelr;
   edges[btn] = 0;
@@ -492,8 +492,7 @@ void updateButtons(uint8_t btn)
   return;
 }
 
-void update_angle()
-{
+void update_angle(){
   port_avail = 0;
   // lcd_clear();
   char jjj[4];
@@ -534,22 +533,25 @@ void update_angle()
   return;
 }
 
-void cali()
-{
-  actual_cal = buttons[7];
-  if (anterior_cal != actual_cal && actual_cal == 1)
-  {
+void cali(){
+  actual_cal=buttons[7];
+  if(anterior_cal != actual_cal && actual_cal == 1){
     anterior_cal = actual_cal;
     apreto_cal = timer_hw->timelr;
   }
-
+  if(anterior_cal != actual_cal && actual_cal == 0){
+    suelto_cal = timer_hw->timelr;
+    anterior_cal = actual_cal;
+    total_cal = suelto_cal - apreto_cal;
+  }
+  
   tiempo_actual_cal = timer_hw->timelr;
 
-  if ((tiempo_actual_cal - apreto_cal) >= 5e6 && !modo_cal && (buttons[7] || veces_cal != 0))
+  if(total_cal >= 5e6 && !modo_cal)
   {
-    if (veces_cal != 10)
+    if(veces_cal != 10)
     {
-      if (tiempo_actual_cal >= (tiempo_anterior_cal + 1e6))
+      if(tiempo_actual_cal >= (tiempo_anterior_cal + 1e6))
       {
         sio_hw->gpio_togl |= 1 << led;
         sio_hw->gpio_togl |= 1 << led1;
@@ -558,22 +560,21 @@ void cali()
         veces_cal++;
       }
     }
-
-    else if (veces_cal >= 10)
+      
+    else if(veces_cal >= 10)
     {
       modo_cal = 1;
-      menu = 1;
-      apreto_cal = 0;
+      total_cal = 0;
       veces_cal = 0;
+      menu = 1;
       change_lcd = 1;
     }
   }
-
-  else if ((tiempo_actual_cal - apreto_cal) >= 5e6 && modo_cal && (buttons[7] || veces_cal != 0))
+  else if(total_cal >= 5e6 && modo_cal)
   {
-    if (veces_cal != 10)
+    if(veces_cal != 10)
     {
-      if (tiempo_actual_cal >= (tiempo_anterior_cal + 1e6))
+      if(tiempo_actual_cal >= (tiempo_anterior_cal + 1e6))
       {
         sio_hw->gpio_togl |= 1 << led;
         sio_hw->gpio_togl |= 1 << led1;
@@ -582,13 +583,13 @@ void cali()
         veces_cal++;
       }
     }
-    else if (veces_cal >= 10)
+    else if(veces_cal >= 10)
     {
       modo_cal = 0;
-      menu = 0;
-      apreto_cal = 0;
+      total_cal = 0;
       veces_cal = 0;
-      offset = angle; // TODO add offset to IMU
+      offset=angle;
+      menu = 0;
       change_lcd = 1;
       return;
     }
@@ -597,10 +598,7 @@ void cali()
     return;
 }
 
-uint32_t suelto_con = 0, total_con = 0;
-
-void confi()
-{
+void confi(){
   actual_con = buttons[6];
   if(anterior_con != actual_con && actual_con == 1){
       anterior_con = actual_con;
@@ -675,22 +673,25 @@ else if(total_con >= 5e6 && modo_conf)
   }
 }
 
-void memo()
-{
+void memo(){
   actual_mem = buttons[9];
-  if (anterior_mem != actual_mem && actual_mem == 1)
-  {
+  if(anterior_mem != actual_mem && actual_mem == 1){
     anterior_mem = actual_mem;
     apreto_mem = timer_hw->timelr;
   }
-
+  if(anterior_mem != actual_mem && actual_mem == 0){
+    suelto_mem = timer_hw->timelr;
+    anterior_mem = actual_mem;
+    total_mem = suelto_mem - apreto_mem;
+  }
+  
   tiempo_actual_mem = timer_hw->timelr;
 
-  if ((tiempo_actual_mem - apreto_mem) >= 5e6 && !modo_mem && (buttons[9] || veces_mem != 0))
+  if(total_mem >= 5e6 && !modo_mem)
   {
-    if (veces_mem != 10)
+    if(veces_mem != 10)
     {
-      if (tiempo_actual_mem >= (tiempo_anterior_mem + 1e6))
+      if(tiempo_actual_mem >= (tiempo_anterior_mem + 1e6))
       {
         sio_hw->gpio_togl |= 1 << led;
         sio_hw->gpio_togl |= 1 << led1;
@@ -699,22 +700,21 @@ void memo()
         veces_mem++;
       }
     }
-
-    else if (veces_mem >= 10)
+      
+    else if(veces_mem >= 10)
     {
       modo_mem = 1;
-      menu = 1;
-      apreto_mem = 0;
+      total_mem = 0;
       veces_mem = 0;
+      menu = 1;
       change_lcd = 1;
     }
   }
-
-  else if ((tiempo_actual_mem - apreto_mem) >= 5e6 && modo_mem && (buttons[9] || veces_mem != 0))
+  else if(total_mem >= 5e6 && modo_mem)
   {
-    if (veces_mem != 10)
+    if(veces_mem != 10)
     {
-      if (tiempo_actual_mem >= (tiempo_anterior_mem + 1e6))
+      if(tiempo_actual_mem >= (tiempo_anterior_mem + 1e6))
       {
         sio_hw->gpio_togl |= 1 << led;
         sio_hw->gpio_togl |= 1 << led1;
@@ -723,15 +723,17 @@ void memo()
         veces_mem++;
       }
     }
-    else if (veces_mem >= 10)
+    else if(veces_mem >= 10)
     {
       modo_mem = 0;
-      menu = 0;
-      apreto_mem = 0;
+      total_mem = 0;
       veces_mem = 0;
+      menu = 0;
       change_lcd = 1;
+      return;
     }
   }
+
   if (tiempo_envio_trama >= 1000)
   {
     tiempo_envio_trama = 0;
