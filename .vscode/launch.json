@@ -18,7 +18,8 @@
       "runToEntryPoint": "main",
       "openOCDLaunchCommands": [
         "adapter speed 1000"
-      ]
+      ],
+      "liveWatch":"liveWatch.enabled"
     },
     {
       "name": "Pico Debug (Cortex-Debug with external OpenOCD)",

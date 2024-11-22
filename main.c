@@ -16,11 +16,14 @@
 #include "display.h"
 #include "pins.h"
 #include "matriz.h"
+#include "encoder.h"
 
 #define pi 3.14159265358979323
 
 //*-------------Prototypes-------------*/
 void beginUart();
+
+void Recibe_car1();
 
 void update_angle(); // LCD
 
@@ -41,21 +44,19 @@ void LCD_menu();
 uint8_t port_avail = 1;
 
 uint32_t hid_buttons = 0, last_hid_buttons = 0, trigger = 0, db_time = 10e3; // HID
-uint8_t buttons[15] = {0};
 
 int tiempo_envio_trama = 0; // Mem
 
 uint8_t matriz = 0;
 
-char *button_strings[] = {" ", "Boton 1", "Boton 2", "Boton 3", "Boton 4", "Boton 5", "Boton 6", "Boton 7", "Boton 8", "Boton 9", "Boton 10", "Boton 11", "Boton 12", "Boton 13", "Boton 14", "Boton 15", "Boton 16", "Boton 17", "Boton 18", "Boton 19", "Boton 20", "Boton 21", "Boton 22"};
+char *button_strings[] = {" ", "buttons 1", "buttons 2", "buttons 3", "buttons 4", "buttons 5", "buttons 6", "buttons 7", "buttons 8", "buttons 9", "buttons 10", "buttons 11", "buttons 12", "buttons 13", "buttons 14", "buttons 15", "buttons 16", "buttons 17", "buttons 18", "buttons 19", "buttons 20", "buttons 21", "buttons 22"};
 
-int8_t angle = 0;
+int64_t angle[6] = {0}, f_angle = 0;
 
 uint8_t reset = 0, edge = 0; // LCD
 uint8_t change_lcd = 0;      // Does the LCD need to be updated?
 uint32_t last_lcd = 0;       // last time the LCD was updated
 
-int grado2 = 0;
 int16_t xaxis, yaxis, zaxis;
 
 uint16_t x = 0;    // HID
@@ -64,8 +65,8 @@ uint32_t last = 0; // HID
 
 uint8_t encoder1A = 0, encoder1B = 0, encoder2A = 0, encoder2B = 0, encoder3A = 0, encoder3B = 0, encoder4A = 0, encoder4B = 0, encoder5A = 0, encoder5B = 0; // Encoder
 uint8_t ultimo1, ultimo2, ultimo3, ultimo4, ultimo5;                                                                                                          // Encoder
-uint8_t encoder1, encoder2 = 0, encoder3 = 0, encoder4 = 0, encoder5 = 0;                                                                                     // Encoder
-uint8_t l_encoder1 = 0, l_encoder2 = 0, l_encoder3 = 0, l_encoder4 = 0, l_encoder5 = 0;                                                                       // Encoder
+uint8_t l_encoder1 = 0, l_encoder2 = 0, l_encoder3 = 0, l_encoder4 = 0, l_encoder5 = 0; // Encoder
+uint8_t triger_encoder;                   
 
 uint8_t edges[15]; // Rising edges for every button
 
@@ -73,7 +74,9 @@ uint8_t veces_con = 0, modo_conf = 0;                                           
 uint32_t tiempo_anterior_con = 0, tiempo_actual_con = 0, actual_con, anterior_con = 0, apreto_con = 0; // Confi
 uint8_t MARTIN = 0;                                                                                    // fuente de datos Confi
 
-uint8_t veces_cal = 0, modo_cal = 0, offset = 0;                                                       // Calibración
+int offset = 0;
+
+uint8_t veces_cal = 0, modo_cal = 0;                                                       // Calibración
 uint32_t tiempo_anterior_cal = 0, tiempo_actual_cal = 0, actual_cal, anterior_cal = 0, apreto_cal = 0; // Calibración
 
 uint8_t start_recording = 0, stop_recording = 0, start_streaming = 0, stop_streaming = 0, replay = 0;  // Mem
@@ -91,6 +94,26 @@ uint8_t linea = 0, change = 1;                                       // modo mem
 char *mem_strings[] = {"Inicio", "Fin", "Repeticion", "Salir", "<"}; // LCD
 
 uint32_t suelto_con = 0, total_con = 0, suelto_cal = 0, total_cal = 0, suelto_mem = 0, total_mem = 0;
+
+uint8_t samples = 0;
+
+char caracter_rec;
+uint8_t indice=0,recibo[50];
+
+char caracter_rec1;
+uint8_t indice1=0,recibo1[50];
+
+uint8_t encoders[6] = {0}, n=0, arranca = 0, termina = 0;
+
+int angle1 = 0;
+
+uint32_t press = 0;
+
+uint8_t buttons[25] = {0};
+
+uint8_t encoder1 = 0, encoder2 = 0, encoder3 = 0, encoder4 = 0, encoder5 = 0;
+
+uint8_t i = 0;
 
 //*-------------Global Variables-------------*/
 
@@ -118,7 +141,6 @@ int main(void)
 
   pinConfig(COLUMN1, 5, 33); // salidas
   pinConfig(COLUMN2, 5, 33);
-  pinConfig(16, 5, 33);
   pinConfig(COLUMN3, 5, 33);
   pinConfig(COLUMN4, 5, 33);
   pinConfig(ROW1, 5, 0b11100111); // entrada
@@ -128,6 +150,9 @@ int main(void)
   pinConfig(led, 5, 0b00100001);
   pinConfig(led1, 5, 0b00100001);
   pinConfig(led2, 5, 0b00100001);
+
+  pinConfig(fc1, 5, 0b11100111);
+  pinConfig(fc2, 5, 0b11100111);
   //*-------------Pin Configurations-------------*/
 
   //*-------------HID-------------*/
@@ -159,97 +184,8 @@ int main(void)
   {
 
     tud_task(); // tinyusb device task
-    /*
 
-    //-------------Encoders-------------
-    encoder1A = readPin(RE_LEFT_A, 1);
-    encoder1B = readPin(RE_LEFT_B, 1);
-    encoder2A = readPin(RE_C_LEFT_A, 1);
-    encoder2B = readPin(RE_C_LEFT_B, 1);
-    encoder3A = readPin(RE_MID_A, 1);
-    encoder3B = readPin(RE_MID_B, 1);
-    encoder4A = readPin(RE_C_RIGHT_A, 1);
-    encoder4B = readPin(RE_C_RIGHT_B, 1);
-    encoder5A = readPin(RE_RIGHT_A, 1);
-    encoder5B = readPin(RE_RIGHT_B, 1);
-
-    // si el A es diferente al ultimo estado, that means a Pulse has occured
-    if(encoder1A != ultimo1){
-      // si el B es diferente al A, that means the encoder is rotating clockwise
-      if(encoder1B != encoder1A) {
-        encoder1 ++;
-        hid_buttons |= 1 << 13;
-        updateButtons(13);
-      } else {
-        encoder1 --;
-        hid_buttons |= 1 << 14;
-        updateButtons(14);
-      }
-    }
-    ultimo1 = encoder1A; // poner el ultimo estado q esta y no entre al if
-
-    // si el A es diferente al ultimo estado, that means a Pulse has occured
-    if(encoder2A != ultimo2){
-      // si el B es diferente al A, that means the encoder is rotating clockwise
-      if(encoder2B != encoder2A) {
-        encoder2 ++;
-        hid_buttons |= 1 << 15;
-        updateButtons(15);
-      } else {
-        encoder2 --;
-        hid_buttons |= 1 << 16;
-        updateButtons(16);
-      }
-    }
-    ultimo2 = encoder2A; // poner el ultimo estado q esta y no entre al if
-
-    // si el A es diferente al ultimo estado, that means a Pulse has occured
-    if(encoder3A != ultimo3){
-      // si el B es diferente al A, that means the encoder is rotating clockwise
-      if(encoder3B != encoder3A) {
-        encoder3 ++;
-        hid_buttons |= 1 << 17;
-        updateButtons(17);
-      } else {
-        encoder3 --;
-        hid_buttons |= 1 << 18;
-        updateButtons(18);
-      }
-    }
-    ultimo3 = encoder3A; // poner el ultimo estado q esta y no entre al if
-
-    // si el A es diferente al ultimo estado, that means a Pulse has occured
-    if(encoder4A != ultimo4){
-      // If the outputB state is different to the outputA state, that means the encoder is rotating clockwise
-      if(encoder4B != encoder4A) {
-        encoder4 ++;
-        hid_buttons |= 1 << 19;
-        updateButtons(19);
-      } else {
-        encoder4 --;
-        hid_buttons |= 1 << 20;
-        updateButtons(20);
-      }
-    }
-    ultimo4 = encoder4A; // poner el ultimo estado q esta y no entre al if
-
-    // si el A es diferente al ultimo estado, that means a Pulse has occured
-    if(encoder5A != ultimo5){
-      // si el B es diferente al A, that means the encoder is rotating clockwise
-      if(encoder5B != encoder5A) {
-        encoder5 ++;
-        hid_buttons |= 1 << 21;
-        updateButtons(21);
-      } else {
-        encoder5 --;
-        hid_buttons |= 1 << 22;
-        updateButtons(22);
-      }
-    }
-    ultimo5 = encoder5A; // poner el ultimo estado q esta y no entre al if
-    //-------------Encoders-------------
-
-    */
+    
     //-------------Matriz-------------
     if(hid_buttons != last_hid_buttons){
       if(hid_buttons){
@@ -263,6 +199,7 @@ int main(void)
       edge = 0;
     }
 
+    /*
     if(buttons[1] && !menu && edge) updateButtons(1);
     if(buttons[2] && edge) updateButtons(2);
     if(buttons[3] && edge) updateButtons(3);
@@ -275,6 +212,7 @@ int main(void)
     if(buttons[10] && edge) updateButtons(10);
     if(buttons[11] && edge) updateButtons(11);
     if(buttons[12] && edge) updateButtons(12);
+    */
 
 
     //-------------Matriz-------------
@@ -300,6 +238,14 @@ int main(void)
       LCD_menu();
     }
 
+    if(modo_conf){
+      torque = encoder2;
+      if(last_torque != torque){
+        change_lcd = 1;
+        last_torque = torque;
+      }
+    }
+
     else if(change_lcd & !menu){
       port_avail = 0;
       last_update = timer_hw->timelr;
@@ -317,15 +263,66 @@ int main(void)
 void SysTick_Handler(void)
 { // Entra cada 1ms
 
-  sio_hw->gpio_set |= 1 << 16;
-
   tiempo_envio_trama++;
 
   if((trigger + db_time) < timer_hw->timelr){
     hid_buttons = readMatrix(buttons, edges, menu); 
   }
 
-  static int t = 0, angle1 = 0;
+  read_encoders(buttons);//! this could maybe break everything
+
+  if(buttons[15]){
+    hid_buttons |= 1 << 15;
+  }
+
+  if(buttons[16]){
+    hid_buttons |= 1 << 16;
+  }
+
+  if(buttons[17]){
+    hid_buttons |= 1 << 17;
+  }
+
+  if(buttons[18]){
+    hid_buttons |= 1 << 18;
+  }
+
+  if(buttons[19]){
+    hid_buttons |= 1 << 19;
+  }
+
+  if(buttons[20]){
+    hid_buttons |= 1 << 20;
+  }
+
+  if(buttons[21]){
+    hid_buttons |= 1 << 21;
+  }
+
+  if(buttons[22]){
+    hid_buttons |= 1 << 22;
+  }
+
+  if(buttons[23]){
+    hid_buttons |= 1 << 23;
+  }
+
+  if(buttons[24]){
+    hid_buttons |= 1 << 24;
+  }
+
+  static int t = 0, temp_angle = 0, h = 0;
+
+  if(h++ >= 10){
+    h = 0;
+    for(int i = 15; i < 25; i++){
+      buttons[i] = 0;
+    }
+  }
+
+  
+
+
   if (t++ > 100 && port_avail)
   {
     port_avail = 0;
@@ -333,14 +330,28 @@ void SysTick_Handler(void)
 
     Mpu6050_comm(&xaxis, &yaxis, &zaxis, MPU6050_adress);
 
-    angle = atan2((xaxis / 16384.0), (zaxis / 16384.0)) * (180 / pi);
+    angle[i++] = (atan2((xaxis / 16384.0), (zaxis / 16384.0)) * (180 / pi)) - offset;
 
-    angle1 = (angle * 128) / 180;
+    if(i == 6)
+      i = 0;
+
     port_avail = 1;
-  }
-  hid_task(angle1, 0, 0, 0, 0, 0, hid_buttons);
 
-  sio_hw->gpio_clr |= 1 << 16;
+  
+  }
+
+  int32_t temp = 0;
+  for(int j = 0; j < 7; j++){
+    temp += angle[j];
+  }
+
+  f_angle = temp / 6;
+
+
+  // 180 ------> 127
+  //  x  ------> x  
+  angle1 = ((f_angle * 127) / 180) * -1;
+  hid_task((int8_t)angle1, 0, 0, 0, 0, 0, hid_buttons);
 
   return;
 }
@@ -382,7 +393,7 @@ void LCD_menu(){
     char *ddd = "Torque: ";
     lcd_string(ddd);
 
-    char eee[3];
+    char eee[4];
     itoa(torque, eee, 10);
 
     lcd_set_cursor(1, 7);
@@ -449,8 +460,8 @@ void LCD_menu(){
 }
 
 void beginUart(){
-  uart0_hw->ibrd = 813;
-  uart0_hw->fbrd = 52;
+  uart0_hw->ibrd = 67;
+  uart0_hw->fbrd = 53;
   // Largo de la palabra
   // 11 -> 8 bits
   uart0_hw->lcr_h = (uart0_hw->lcr_h & ~UART_UARTLCR_H_WLEN_LSB) | (0b11) << UART_UARTLCR_H_WLEN_LSB;
@@ -473,7 +484,40 @@ void beginUart(){
   padsbank0_hw->io[1] = padsbank0_hw->io[1] & (~PADS_BANK0_GPIO0_OD_BITS);
   padsbank0_hw->io[1] = padsbank0_hw->io[1] | PADS_BANK0_GPIO0_IE_BITS;
   iobank0_hw->io[1].ctrl = GPIO_FUNC_UART;
+  uart0_hw->imsc = UART_UARTIMSC_RXIM_BITS;
+  
+  irq_set_exclusive_handler(UART0_IRQ, Recibe_car1);
+  irq_set_enabled(UART0_IRQ, true);
   return;
+}
+
+void Recibe_car1(){
+
+  if((uart0_hw->ris & UART_UARTRIS_RXRIS_BITS) != 0) // Chequeo la interrupcion por RX
+  {
+    caracter_rec = uart0_hw->dr;
+    if(caracter_rec1 =='!'){
+      indice1=0;
+    }
+
+    recibo1[indice1++] = caracter_rec1;
+    uart0_hw->icr |= UART_UARTICR_RXIC_BITS; // Limpio la interrupcion de RX
+  }
+
+
+  // !B13-B14?
+
+  if(caracter_rec1=='?' && !replay){
+    if(indice < 5){
+      buttons[((recibo[2]-48)*10)+(recibo[3]-48)] = 1;
+      if(edge)
+        updateButtons(((recibo[2]-48)*10)+(recibo[3]-48));
+    }
+    else{
+      buttons[((recibo[2]-48)*10)+(recibo[3]-48)] = 1;
+      buttons[((recibo[6]-48)*10)+(recibo[7]-48)] = 1;
+    } 
+  }
 }
 
 void updateButtons(uint8_t btn){
@@ -499,29 +543,29 @@ void update_angle(){
   char *bspace = "               "; // bottom space
   lcd_set_cursor(1, 0);
   lcd_string(bspace);
-  itoa(angle, jjj, 10);
+  itoa(f_angle, jjj, 10);
   char *angulo = jjj;
   char *m1 = "Angulo: ";
   char *space = "         ";
   lcd_set_cursor(0, 0);
   lcd_string(m1);
-  if (angle < 10 && angle > 0)
+  if (f_angle < 10 && f_angle > 0)
   {
     lcd_set_cursor(0, 8);
     lcd_string(space);
   }
-  else if (angle < 10 && angle < 0)
+  else if (f_angle < 10 && f_angle < 0)
   {
     lcd_set_cursor(0, 9);
     lcd_string(space);
   }
 
-  if (angle < 100 && angle > 0)
+  if (f_angle < 100 && f_angle > 0)
   {
     lcd_set_cursor(0, 9);
     lcd_string(space);
   }
-  else if (angle < 100 && angle < 0)
+  else if (f_angle < 100 && f_angle < 0)
   {
     lcd_set_cursor(0, 10);
     lcd_string(space);
@@ -588,7 +632,7 @@ void cali(){
       modo_cal = 0;
       total_cal = 0;
       veces_cal = 0;
-      offset=angle;
+      offset=f_angle;
       menu = 0;
       change_lcd = 1;
       return;
@@ -601,64 +645,67 @@ void cali(){
 void confi(){
   actual_con = buttons[6];
   if(anterior_con != actual_con && actual_con == 1){
-      anterior_con = actual_con;
-      apreto_con = timer_hw->timelr;
+    anterior_con = actual_con;
+    apreto_con = timer_hw->timelr;
   }
 
   if(anterior_con != actual_con && actual_con == 0){
     suelto_con = timer_hw->timelr;
     anterior_con = actual_con;
     total_con = suelto_con - apreto_con;
-}
-
-
-tiempo_actual_con = timer_hw->timelr;
-
-if(total_con >= 5e6 && !modo_conf)
-{
-  if(veces_con != 5)
-  {
-    if(tiempo_actual_con >= (tiempo_anterior_con + 1e6))
-    {
-      sio_hw->gpio_togl |= 1 << led;
-      tiempo_anterior_con = tiempo_actual_con;
-      veces_con++;
-    }
   }
-    
-  else if(veces_con >= 5)
-  {
-    modo_conf = 1;
-    total_con = 0;
-    veces_con = 0;
-    change_lcd = 1;
-    menu = 1;
-    return;
-  }
-}
 
-else if(total_con >= 5e6 && modo_conf)
-{
+
+  tiempo_actual_con = timer_hw->timelr;
+
+  if(total_con >= 5e6 && !modo_conf)
+  {
     if(veces_con != 5)
     {
-        if(tiempo_actual_con >= (tiempo_anterior_con + 1e6))
-        {
-            sio_hw->gpio_togl |= 1 << led;
-            tiempo_anterior_con = tiempo_actual_con;
-            veces_con++;
-        }
+      if(tiempo_actual_con >= (tiempo_anterior_con + 1e6))
+      {
+        sio_hw->gpio_togl |= 1 << led;
+        sio_hw->gpio_togl |= 1 << led1;
+        sio_hw->gpio_togl |= 1 << led2;
+        tiempo_anterior_con = tiempo_actual_con;
+        veces_con++;
+      }
     }
+      
     else if(veces_con >= 5)
     {
+      modo_conf = 1;
+      total_con = 0;
+      veces_con = 0;
+      change_lcd = 1;
+      menu = 1;
+      return;
+    }
+  }
+
+  else if(total_con >= 5e6 && modo_conf)
+  {
+      if(veces_con != 5)
+      {
+          if(tiempo_actual_con >= (tiempo_anterior_con + 1e6))
+          {
+            sio_hw->gpio_togl |= 1 << led;
+            sio_hw->gpio_togl |= 1 << led1;
+            sio_hw->gpio_togl |= 1 << led2;
+            tiempo_anterior_con = tiempo_actual_con;
+            veces_con++;
+          }
+      }
+      else if(veces_con >= 5)
+      {
         modo_conf = 0;
         total_con = 0;
         veces_con = 0;
         change_lcd = 1;
         menu = 0;
         return;
-    }
-}
-  // TODO torque control
+      }
+  }
 
   if (buttons[1] && edge)
   {
@@ -674,65 +721,6 @@ else if(total_con >= 5e6 && modo_conf)
 }
 
 void memo(){
-  actual_mem = buttons[9];
-  if(anterior_mem != actual_mem && actual_mem == 1){
-    anterior_mem = actual_mem;
-    apreto_mem = timer_hw->timelr;
-  }
-  if(anterior_mem != actual_mem && actual_mem == 0){
-    suelto_mem = timer_hw->timelr;
-    anterior_mem = actual_mem;
-    total_mem = suelto_mem - apreto_mem;
-  }
-  
-  tiempo_actual_mem = timer_hw->timelr;
-
-  if(total_mem >= 5e6 && !modo_mem)
-  {
-    if(veces_mem != 10)
-    {
-      if(tiempo_actual_mem >= (tiempo_anterior_mem + 1e6))
-      {
-        sio_hw->gpio_togl |= 1 << led;
-        sio_hw->gpio_togl |= 1 << led1;
-        sio_hw->gpio_togl |= 1 << led2;
-        tiempo_anterior_mem = tiempo_actual_mem;
-        veces_mem++;
-      }
-    }
-      
-    else if(veces_mem >= 10)
-    {
-      modo_mem = 1;
-      total_mem = 0;
-      veces_mem = 0;
-      menu = 1;
-      change_lcd = 1;
-    }
-  }
-  else if(total_mem >= 5e6 && modo_mem)
-  {
-    if(veces_mem != 10)
-    {
-      if(tiempo_actual_mem >= (tiempo_anterior_mem + 1e6))
-      {
-        sio_hw->gpio_togl |= 1 << led;
-        sio_hw->gpio_togl |= 1 << led1;
-        sio_hw->gpio_togl |= 1 << led2;
-        tiempo_anterior_mem = tiempo_actual_mem;
-        veces_mem++;
-      }
-    }
-    else if(veces_mem >= 10)
-    {
-      modo_mem = 0;
-      total_mem = 0;
-      veces_mem = 0;
-      menu = 0;
-      change_lcd = 1;
-      return;
-    }
-  }
   
   if (tiempo_envio_trama >= 1000 && !mandar_trama)
   {
@@ -744,18 +732,20 @@ void memo(){
     trama[3] = 'a';
     trama[4] = 'a';
 
-    if (angle >= 0)
+    if (f_angle >= 0)
     {
       trama[1] = '+';
     }
     else
     {
       trama[1] = '-';
-      angle = angle * -1;
+      f_angle = f_angle * -1;
     }
-    trama[4] = (angle % 10) + 48;
-    trama[3] = ((angle / 10) % 10) + 48;
-    trama[2] = ((angle / 10) / 10) + 48;
+    trama[4] = (f_angle % 10) + 48;
+    trama[3] = ((f_angle / 10) % 10) + 48;
+    trama[2] = ((f_angle / 10) / 10) + 48;
+
+    trama[5] = '\0';
 
     if (buttons[1])
       strcat(trama, "-B1");
@@ -850,23 +840,9 @@ void memo(){
       strcat(trama, aux);
     }
 
-    if (menu && buttons[9] && linea == 0 && edge)
-      strcat(trama, "-R1");
+    if (modo_conf)
+      strcat(trama, "CN");
 
-    if (menu && buttons[9] && linea == 0 && edge)
-      strcat(trama, "-R0");
-
-    if (menu && buttons[9] && linea == 0 && edge)
-    {
-      strcat(trama, "-S1");
-      replay = 1;
-    }
-
-    if (menu && buttons[9] && linea == 0 && edge)
-    {
-      strcat(trama, "-S0");
-      replay = 0;
-    }
     strcat(trama, "?");
     mandar_trama = 1;
   }

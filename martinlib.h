@@ -18,6 +18,6 @@ int disable_adc();
 
 void begin_systick(uint32_t reload);
 
-
+void delay(uint32_t tiempo);
 
 #endif

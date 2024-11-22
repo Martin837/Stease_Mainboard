@@ -10,6 +10,8 @@ target_sources(MainBoard PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/mpu.c
     ${CMAKE_CURRENT_LIST_DIR}/display.c
     ${CMAKE_CURRENT_LIST_DIR}/matriz.c
+    ${CMAKE_CURRENT_LIST_DIR}/i2c_comm.c
+    ${CMAKE_CURRENT_LIST_DIR}/encoder.c
 )
 
 # Make sure TinyUSB can find tusb_config.h

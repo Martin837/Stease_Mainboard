@@ -138,4 +138,9 @@ void begin_systick(uint32_t reload){
     return;
 }
 
-//interrupts page 238
+//Delay ara
+void delay(uint32_t tiempo){
+    uint32_t a = timer_hw->timelr;
+    while((tiempo+a) > timer_hw->timelr){}
+    return;
+}

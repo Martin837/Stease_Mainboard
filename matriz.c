@@ -11,6 +11,9 @@
 uint32_t trigger_buttons = 0, trigger_enc = 0, done = 0;
 uint8_t last_states[24] = {0}, wait = 0, stage = 0;
 uint32_t debounce = 10e3, pressed = 0;
+uint8_t sfc1 = 0, sfc2 = 0, lfc1 = 0, lfc2 = 0;
+uint32_t press1 = 0, press2 = 0;
+
 
 uint32_t readMatrix(uint8_t buttons[], uint8_t edges[], uint8_t menu){
     switch (stage){
@@ -140,6 +143,31 @@ uint32_t readMatrix(uint8_t buttons[], uint8_t edges[], uint8_t menu){
         else pressed &= ~(1<<12);
 
         done = 0;
+    }
+
+    sfc1 = readPin(fc1, 0);
+    sfc2 = readPin(fc2, 0);
+
+    if((sfc1 != lfc1) && ((press1 + 10e3) < timer_hw->timelr)){
+        press1 = timer_hw->timelr;
+        lfc1 = sfc1;
+        if(sfc1){
+            pressed |= 1 << 13;
+        }
+        else{
+            pressed &= ~(1<<13);
+        }
+    }
+    
+    if((sfc2 != lfc2) && ((press2 + 10e3) < timer_hw->timelr)){
+        press2 = timer_hw->timelr;
+        lfc2 = sfc2;
+        if(sfc2){
+            pressed |= 1 << 14;
+        }
+        else{
+            pressed &= ~(1<<14);
+        }
     }
 
     return pressed;

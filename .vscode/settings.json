@@ -35,7 +35,8 @@
         "stdio.h": "c",
         "adc.h": "c",
         "cstdlib": "c",
-        "algorithm": "c"
+        "algorithm": "c",
+        "i2c_comm.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

@@ -20,3 +20,12 @@
 #define led 20
 #define led1 21
 #define led2 28
+
+#define fc1 16
+#define fc2 17
+
+static uint8_t last_encoder1a = 0, last_encoder1b = 0, last_encoder2a = 0, last_encoder2b = 0, last_encoder3a = 0, last_encoder3b = 0, last_encoder4a = 0, last_encoder4b = 0, last_encoder5a = 0, last_encoder5b = 0;
+
+static uint32_t trigger_encoder = 0;
+
+
