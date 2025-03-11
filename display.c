@@ -7,24 +7,31 @@
 #include "martinlib.h"
 #include <string.h>
 
-// commands
-const int LCD_CLEARDISPLAY = 0x01;
-const int LCD_RETURNHOME = 0x02;
-const int LCD_ENTRYMODESET = 0x04;
-const int LCD_DISPLAYCONTROL = 0x08;
-const int LCD_CURSORSHIFT = 0x10;
-const int LCD_FUNCTIONSET = 0x20;
-const int LCD_SETCGRAMADDR = 0x40;
-const int LCD_SETDDRAMADDR = 0x80;
+/**
+ * LCD Display Controller
+ * --------------------
+ * Handles communication and control of the LCD display module
+ * using I2C interface.
+ */
 
-// flags for display entry mode
-const int LCD_ENTRYSHIFTINCREMENT = 0x01;
-const int LCD_ENTRYLEFT = 0x02;
+/* Display Constants */
+const int LCD_CLEARDISPLAY = 0x01;    // Clear display command
+const int LCD_RETURNHOME = 0x02;       // Return cursor home
+const int LCD_ENTRYMODESET = 0x04;     // Set entry mode
+const int LCD_DISPLAYCONTROL = 0x08;   // Display control command
+const int LCD_CURSORSHIFT = 0x10;      // Shift cursor position
+const int LCD_FUNCTIONSET = 0x20;      // Set display function
+const int LCD_SETCGRAMADDR = 0x40;     // Set CG RAM address
+const int LCD_SETDDRAMADDR = 0x80;     // Set DD RAM address
 
-// flags for display and cursor control
-const int LCD_BLINKON = 0x01;
-const int LCD_CURSORON = 0x02;
-const int LCD_DISPLAYON = 0x04;
+/* Display Mode Flags */
+const int LCD_ENTRYSHIFTINCREMENT = 0x01;  // Increment cursor position
+const int LCD_ENTRYLEFT = 0x02;            // Move cursor left
+
+/* Cursor Control Flags */
+const int LCD_BLINKON = 0x01;          // Enable cursor blink
+const int LCD_CURSORON = 0x02;         // Show cursor
+const int LCD_DISPLAYON = 0x04;        // Turn display on
 
 // flags for display and cursor shift
 const int LCD_MOVERIGHT = 0x04;
@@ -83,6 +90,11 @@ void lcd_clear(void) {
 
 // go to location on LCD
 void lcd_set_cursor(int line, int position) {
+  /* Position cursor on LCD
+   * Parameters:
+   *   line: Display line (0-1)
+   *   position: Character position (0-15)
+   */
   int val = (line == 0) ? 0x80 + position : 0xC0 + position;  
   lcd_send_byte(val, LCD_COMMAND);
 }
@@ -92,12 +104,21 @@ static inline void lcd_char(char val) {
 }
 
 void lcd_string(const char *s) {
+  /* Write string to LCD display
+   * Parameters:
+   *   s: Null-terminated string to display
+   */
   while (*s) {
     lcd_char(*s++);
   }
 }
 
-void lcd_init() {
+void lcd_init(void) {
+  /* Initialize LCD display
+   * - Sets up 4-bit mode
+   * - Configures display lines and font
+   * - Enables display and sets entry mode
+   */
   lcd_send_byte(0x03, LCD_COMMAND);
   lcd_send_byte(0x03, LCD_COMMAND);
   lcd_send_byte(0x03, LCD_COMMAND);

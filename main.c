@@ -1,3 +1,14 @@
+/**
+ * Main Board Control System
+ * ------------------------
+ * This file implements the main control logic for an input device with:
+ * - MPU6050 motion sensing
+ * - Multiple rotary encoders
+ * - LCD display
+ * - Button matrix
+ * - USB HID interface
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include "pico/stdlib.h"
@@ -18,57 +29,98 @@
 #include "matriz.h"
 #include "encoder.h"
 
+/* System Constants */
 #define pi 3.14159265358979323
+#define MPU6050_adress 0x68    // I2C address for motion sensor
 
-//*-------------Prototypes-------------*/
-void beginUart();
+/* Function Prototypes */
+void beginUart(void);          // Initialize UART communication
+void Recibe_car1(void);        // UART receive interrupt handler
+void update_angle(void);       // Update angle display on LCD
+void updateButtons(uint8_t);   // Handle button state changes
+void confi(void);             // Configuration mode handler
+void memo(void);              // Memory operations handler
+void cali(void);              // Calibration mode handler
+void LCD_menu(void);          // LCD menu system handler
 
-void Recibe_car1();
+/* Global State Variables */
+// Port Control
+uint8_t port_avail = 1;        // Communication port availability flag
 
-void update_angle(); // LCD
+// HID Interface Control
+uint32_t hid_buttons = 0;      // Current HID button states
+uint32_t last_hid_buttons = 0; // Previous HID button states
+uint32_t trigger = 0;          // Button event timestamp
+uint32_t db_time = 10e3;       // Debounce timing (10ms)
 
-void updateButtons(uint8_t btn); // LCD
+// Communication Control
+int tiempo_envio_trama = 0;    // Frame transmission timer
+uint8_t matriz = 0;            // Matrix scanning state
 
-void confi();
+// Interface Text Resources
+char *button_strings[] = {     
+    " ",                    // Empty string for no button
+    "buttons 1",           // Button 1 label
+    "buttons 2",           // Button 2 label
+    "buttons 3",           // Button 3 label
+    "buttons 4",           // Button 4 label
+    "buttons 5",           // Button 5 label
+    "buttons 6",           // Button 6 label
+    "buttons 7",           // Button 7 label
+    "buttons 8",           // Button 8 label
+    "buttons 9",           // Button 9 label
+    "buttons 10",          // Button 10 label
+    "buttons 11",          // Button 11 label
+    "buttons 12",          // Button 12 label
+    "buttons 13",          // Button 13 label
+    "buttons 14",          // Button 14 label
+    "buttons 15",          // Button 15 label
+    "buttons 16",          // Button 16 label
+    "buttons 17",          // Button 17 label
+    "buttons 18",          // Button 18 label
+    "buttons 19",          // Button 19 label
+    "buttons 20",          // Button 20 label
+    "buttons 21",          // Button 21 label
+    "buttons 22"           // Button 22 label
+};
 
-void memo();
+// Motion Tracking
+int64_t angle[6] = {0};       // Angle measurement history
+int64_t f_angle = 0;          // Filtered angle value
 
-void cali();
+// Display Control
+uint8_t reset = 0;            // Display reset flag
+uint8_t edge = 0;             // Button edge detection
+uint8_t change_lcd = 0;       // Display update needed flag
+uint32_t last_lcd = 0;        // Last display update time
 
-void LCD_menu();
-//*-------------Prototypes-------------*/
+// Sensor Data
+int16_t xaxis;                // X-axis acceleration
+int16_t yaxis;                // Y-axis acceleration
+int16_t zaxis;                // Z-axis acceleration
 
-//*-------------Global Variables-------------*/
-#define MPU6050_adress 0x68
+// HID Report Data
+uint16_t x = 0;               // X position for HID report
+int8_t sx = 0;                // Signed X value
+uint32_t last = 0;            // Last report timestamp
 
-uint8_t port_avail = 1;
-
-uint32_t hid_buttons = 0, last_hid_buttons = 0, trigger = 0, db_time = 10e3; // HID
-
-int tiempo_envio_trama = 0; // Mem
-
-uint8_t matriz = 0;
-
-char *button_strings[] = {" ", "buttons 1", "buttons 2", "buttons 3", "buttons 4", "buttons 5", "buttons 6", "buttons 7", "buttons 8", "buttons 9", "buttons 10", "buttons 11", "buttons 12", "buttons 13", "buttons 14", "buttons 15", "buttons 16", "buttons 17", "buttons 18", "buttons 19", "buttons 20", "buttons 21", "buttons 22"};
-
-int64_t angle[6] = {0}, f_angle = 0;
-
-uint8_t reset = 0, edge = 0; // LCD
-uint8_t change_lcd = 0;      // Does the LCD need to be updated?
-uint32_t last_lcd = 0;       // last time the LCD was updated
-
-int16_t xaxis, yaxis, zaxis;
-
-uint16_t x = 0;    // HID
-int8_t sx = 0;     // HID
-uint32_t last = 0; // HID
-
-uint8_t encoder1A = 0, encoder1B = 0, encoder2A = 0, encoder2B = 0, encoder3A = 0, encoder3B = 0, encoder4A = 0, encoder4B = 0, encoder5A = 0, encoder5B = 0; // Encoder
-uint8_t ultimo1, ultimo2, ultimo3, ultimo4, ultimo5;                                                                                                          // Encoder
+// Encoder States
+uint8_t encoder1A = 0;        // Encoder 1 channel A state
+uint8_t encoder1B = 0;        // Encoder 1 channel B state
+uint8_t encoder2A = 0;        // Encoder 2 channel A state
+uint8_t encoder2B = 0;        // Encoder 2 channel B state
+uint8_t encoder3A = 0;        // Encoder 3 channel A state
+uint8_t encoder3B = 0;        // Encoder 3 channel B state
+uint8_t encoder4A = 0;        // Encoder 4 channel A state
+uint8_t encoder4B = 0;        // Encoder 4 channel B state
+uint8_t encoder5A = 0;        // Encoder 5 channel A state
+uint8_t encoder5B = 0;        // Encoder 5 channel B state
+uint8_t ultimo1, ultimo2, ultimo3, ultimo4, ultimo5; // Encoder
 uint8_t l_encoder1 = 0, l_encoder2 = 0, l_encoder3 = 0, l_encoder4 = 0, l_encoder5 = 0; // Encoder
 uint8_t triger_encoder;                   
 
-uint8_t edges[15]; // Rising edges for every button
+// Button Edge Detection
+uint8_t edges[15];            // Button edge state array
 
 uint8_t veces_con = 0, modo_conf = 0;                                                                  // Confi
 uint32_t tiempo_anterior_con = 0, tiempo_actual_con = 0, actual_con, anterior_con = 0, apreto_con = 0; // Confi
@@ -114,8 +166,6 @@ uint8_t buttons[25] = {0};
 uint8_t encoder1 = 0, encoder2 = 0, encoder3 = 0, encoder4 = 0, encoder5 = 0;
 
 uint8_t i = 0;
-
-//*-------------Global Variables-------------*/
 
 //*------------- MAIN -------------*/
 int main(void)
@@ -357,6 +407,150 @@ void SysTick_Handler(void)
 }
 //*------------- SYSTICK -------------*/
 
+/**
+ * Main Control System Functions
+ * ===========================
+ */
+
+/* Configuration and Setup Functions */
+void beginUart() {
+    // Configure UART for communication
+    irq_set_exclusive_handler(UART0_IRQ, Recibe_car1);
+    irq_set_enabled(UART0_IRQ, true);
+    // Configure UART line control register
+    uart0_hw->lcr_h = (uart0_hw->lcr_h & ~UART_UARTLCR_H_STP2_LSB) | (0b0) << UART_UARTLCR_H_STP2_LSB;
+    
+    // Configure parity (disabled)
+    uart0_hw->lcr_h = (uart0_hw->lcr_h & ~UART_UARTLCR_H_EPS_LSB) | (0b0) << UART_UARTLCR_H_EPS_LSB;
+    uart0_hw->lcr_h = (uart0_hw->lcr_h & ~UART_UARTLCR_H_PEN_BITS) | (0b0) << UART_UARTLCR_H_PEN_BITS;
+    
+    // Enable UART, TX and RX
+    uart0_hw->cr = UART_UARTCR_UARTEN_BITS | UART_UARTCR_TXE_BITS | UART_UARTCR_RXE_BITS;
+    
+    // Configure TX pin (GPIO0)
+    padsbank0_hw->io[0] = padsbank0_hw->io[0] & (~PADS_BANK0_GPIO0_OD_BITS);
+    padsbank0_hw->io[0] = padsbank0_hw->io[0] | PADS_BANK0_GPIO0_IE_BITS;
+    iobank0_hw->io[0].ctrl = GPIO_FUNC_UART;
+    
+    // Configure RX pin (GPIO1)
+    padsbank0_hw->io[1] = padsbank0_hw->io[1] & (~PADS_BANK0_GPIO0_OD_BITS);
+    padsbank0_hw->io[1] = padsbank0_hw->io[1] | PADS_BANK0_GPIO0_IE_BITS;
+    iobank0_hw->io[1].ctrl = GPIO_FUNC_UART;
+    
+    // Enable RX interrupt
+    uart0_hw->imsc = UART_UARTIMSC_RXIM_BITS;
+    
+    // Set interrupt handler
+    irq_set_exclusive_handler(UART0_IRQ, Recibe_car1);
+    irq_set_enabled(UART0_IRQ, true);
+}
+
+/* Communication Functions */
+void Recibe_car1() {
+    /* Handle UART receive interrupts
+     * Processes incoming data and updates system state
+     * Checks for special characters like '?' for replay mode
+     */
+    if((uart0_hw->ris & UART_UARTRIS_RXRIS_BITS) != 0) {
+        // Process received character
+        caracter_rec = uart0_hw->dr;
+        if(caracter_rec1 =='!'){
+          indice1=0;
+        }
+
+        recibo1[indice1++] = caracter_rec1;
+        uart0_hw->icr |= UART_UARTICR_RXIC_BITS; // Limpio la interrupcion de RX
+    }
+
+
+    // !B13-B14?
+
+    if(caracter_rec1=='?' && !replay){
+      if(indice < 5){
+        buttons[((recibo[2]-48)*10)+(recibo[3]-48)] = 1;
+        if(edge)
+          updateButtons(((recibo[2]-48)*10)+(recibo[3]-48));
+      }
+      else{
+        buttons[((recibo[2]-48)*10)+(recibo[3]-48)] = 1;
+        buttons[((recibo[6]-48)*10)+(recibo[7]-48)] = 1;
+      } 
+    }
+}
+
+/* Display Management Functions */
+void updateButtons(uint8_t btn) {
+    /* Updates LCD display when button state changes
+     * Parameters:
+     * - btn: Button number that triggered the update (1-14)
+     */
+    port_avail = 0;           // Lock port during update
+    last_lcd = timer_hw->timelr;
+    edges[btn] = 0;
+    reset = 1;
+    
+    lcd_clear();
+    sleep_us(10);             // Delay for LCD timing
+    update_angle();
+    sleep_us(10);
+    lcd_set_cursor(1, 0);
+    sleep_us(10);
+    lcd_string(button_strings[btn]);
+    port_avail = 1;           // Release port
+}
+
+void update_angle() {
+    /* Updates angle display on LCD
+     * - Clears previous display
+     * - Formats angle with proper padding
+     * - Handles positive and negative angles differently
+     */
+    port_avail = 0;
+    char jjj[4];
+    char *bspace = "               ";  // Bottom space padding
+    
+    lcd_set_cursor(1, 0);
+    lcd_string(bspace);
+    itoa(f_angle, jjj, 10);
+    // lcd_clear();
+    char jjj[4];
+    char *bspace = "               "; // bottom space
+    lcd_set_cursor(1, 0);
+    lcd_string(bspace);
+    itoa(f_angle, jjj, 10);
+    char *angulo = jjj;
+    char *m1 = "Angulo: ";
+    char *space = "         ";
+    lcd_set_cursor(0, 0);
+    lcd_string(m1);
+    if (f_angle < 10 && f_angle > 0)
+    {
+      lcd_set_cursor(0, 8);
+      lcd_string(space);
+    }
+    else if (f_angle < 10 && f_angle < 0)
+    {
+      lcd_set_cursor(0, 9);
+      lcd_string(space);
+    }
+
+    if (f_angle < 100 && f_angle > 0)
+    {
+      lcd_set_cursor(0, 9);
+      lcd_string(space);
+    }
+    else if (f_angle < 100 && f_angle < 0)
+    {
+      lcd_set_cursor(0, 10);
+      lcd_string(space);
+    }
+
+    lcd_set_cursor(0, 8);
+    lcd_string(angulo);
+    port_avail = 1;
+    return;
+}
+
 void LCD_menu(){
   if (modo_cal)
   {
@@ -456,124 +650,6 @@ void LCD_menu(){
     change_lcd = 0;
     port_avail = 1;
   }
-  return;
-}
-
-void beginUart(){
-  uart0_hw->ibrd = 67;
-  uart0_hw->fbrd = 53;
-  // Largo de la palabra
-  // 11 -> 8 bits
-  uart0_hw->lcr_h = (uart0_hw->lcr_h & ~UART_UARTLCR_H_WLEN_LSB) | (0b11) << UART_UARTLCR_H_WLEN_LSB;
-  // Bits de stop
-  // 0 -> 1 bit
-  uart0_hw->lcr_h = (uart0_hw->lcr_h & ~UART_UARTLCR_H_STP2_LSB) | (0b0) << UART_UARTLCR_H_STP2_LSB;
-  // Seleccion de paridad
-  // 0 -> Paridad impar
-  uart0_hw->lcr_h = (uart0_hw->lcr_h & ~UART_UARTLCR_H_EPS_LSB) | (0b0) << UART_UARTLCR_H_EPS_LSB;
-  // Enable de paridad
-  // 0 -> Paridad desabilitada
-  uart0_hw->lcr_h = (uart0_hw->lcr_h & ~UART_UARTLCR_H_PEN_BITS) | (0b0) << UART_UARTLCR_H_PEN_BITS;
-  // Habilito UART, TX y RX
-  uart0_hw->cr = UART_UARTCR_UARTEN_BITS | UART_UARTCR_TXE_BITS | UART_UARTCR_RXE_BITS;
-  // Configuro el pin 0 para la funcion de UART (TX)
-  padsbank0_hw->io[0] = padsbank0_hw->io[0] & (~PADS_BANK0_GPIO0_OD_BITS);
-  padsbank0_hw->io[0] = padsbank0_hw->io[0] | PADS_BANK0_GPIO0_IE_BITS;
-  iobank0_hw->io[0].ctrl = GPIO_FUNC_UART;
-  // Configuro el pin 1 para la funcion de UART (RX)
-  padsbank0_hw->io[1] = padsbank0_hw->io[1] & (~PADS_BANK0_GPIO0_OD_BITS);
-  padsbank0_hw->io[1] = padsbank0_hw->io[1] | PADS_BANK0_GPIO0_IE_BITS;
-  iobank0_hw->io[1].ctrl = GPIO_FUNC_UART;
-  uart0_hw->imsc = UART_UARTIMSC_RXIM_BITS;
-  
-  irq_set_exclusive_handler(UART0_IRQ, Recibe_car1);
-  irq_set_enabled(UART0_IRQ, true);
-  return;
-}
-
-void Recibe_car1(){
-
-  if((uart0_hw->ris & UART_UARTRIS_RXRIS_BITS) != 0) // Chequeo la interrupcion por RX
-  {
-    caracter_rec = uart0_hw->dr;
-    if(caracter_rec1 =='!'){
-      indice1=0;
-    }
-
-    recibo1[indice1++] = caracter_rec1;
-    uart0_hw->icr |= UART_UARTICR_RXIC_BITS; // Limpio la interrupcion de RX
-  }
-
-
-  // !B13-B14?
-
-  if(caracter_rec1=='?' && !replay){
-    if(indice < 5){
-      buttons[((recibo[2]-48)*10)+(recibo[3]-48)] = 1;
-      if(edge)
-        updateButtons(((recibo[2]-48)*10)+(recibo[3]-48));
-    }
-    else{
-      buttons[((recibo[2]-48)*10)+(recibo[3]-48)] = 1;
-      buttons[((recibo[6]-48)*10)+(recibo[7]-48)] = 1;
-    } 
-  }
-}
-
-void updateButtons(uint8_t btn){
-  port_avail = 0;
-  last_lcd = timer_hw->timelr;
-  edges[btn] = 0;
-  reset = 1;
-  lcd_clear();
-  sleep_us(10);
-  update_angle();
-  sleep_us(10);
-  lcd_set_cursor(1, 0);
-  sleep_us(10);
-  lcd_string(button_strings[btn]);
-  port_avail = 1;
-  return;
-}
-
-void update_angle(){
-  port_avail = 0;
-  // lcd_clear();
-  char jjj[4];
-  char *bspace = "               "; // bottom space
-  lcd_set_cursor(1, 0);
-  lcd_string(bspace);
-  itoa(f_angle, jjj, 10);
-  char *angulo = jjj;
-  char *m1 = "Angulo: ";
-  char *space = "         ";
-  lcd_set_cursor(0, 0);
-  lcd_string(m1);
-  if (f_angle < 10 && f_angle > 0)
-  {
-    lcd_set_cursor(0, 8);
-    lcd_string(space);
-  }
-  else if (f_angle < 10 && f_angle < 0)
-  {
-    lcd_set_cursor(0, 9);
-    lcd_string(space);
-  }
-
-  if (f_angle < 100 && f_angle > 0)
-  {
-    lcd_set_cursor(0, 9);
-    lcd_string(space);
-  }
-  else if (f_angle < 100 && f_angle < 0)
-  {
-    lcd_set_cursor(0, 10);
-    lcd_string(space);
-  }
-
-  lcd_set_cursor(0, 8);
-  lcd_string(angulo);
-  port_avail = 1;
   return;
 }
 
@@ -721,6 +797,24 @@ void confi(){
 }
 
 void memo(){
+    /* Handles frame transmission over UART
+     * Frame format: !Saaa-Bn-EnXXX?
+     * - S: Sign (+ or -)
+     * - aaa: Angle (3 digits)
+     * - Bn: Button states
+     * - EnXXX: Encoder positions
+     */
+    if (tiempo_envio_trama >= 1000 && !mandar_trama) {
+        tiempo_envio_trama = 0;
+        
+        // Initialize frame
+        trama[0] = '!';           // Start delimiter
+        trama[1] = 'S';           // Sign placeholder
+        trama[2] = 'a';           // Angle hundreds
+        trama[3] = 'a';           // Angle tens
+        trama[4] = 'a';           // Angle ones
+        // ...existing code...
+    }
   
   if (tiempo_envio_trama >= 1000 && !mandar_trama)
   {

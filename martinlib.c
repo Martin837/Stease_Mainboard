@@ -1,3 +1,8 @@
+/**
+ * Martin's Utility Library
+ * ----------------------
+ * Common utilities for GPIO, ADC, and timing functions
+ */
 
 #include <stdio.h>
 #include "pico/stdlib.h"
@@ -9,11 +14,15 @@ uint8_t last_debounce_state[29] = {0};
 
 //initialize values
 
-
-
-/// (pin, peripheral, config)
-void pinConfig(uint8_t pin, uint8_t peripheral, uint8_t config){
-    switch(peripheral){
+/* Pin Configuration Functions */
+void pinConfig(uint8_t pin, uint8_t peripheral, uint8_t config) {
+    /* Configure GPIO pin mode and function
+     * Parameters:
+     *   pin: GPIO pin number
+     *   peripheral: Selected peripheral (ADC, UART, etc)
+     *   config: Pin configuration flags
+     */
+    switch(peripheral) {
         case 1: //SPI
 
         case 2: //UART
@@ -50,9 +59,18 @@ void pinConfig(uint8_t pin, uint8_t peripheral, uint8_t config){
     }
     return;
 }
+
 //Modes: 0-Normal, 1-Edge detect, 2-Debounce, Default-Normal
-int readPin(uint8_t pin, uint8_t mode){
-    if(mode == 1){
+int readPin(uint8_t pin, uint8_t mode) {
+    /* Read GPIO pin with optional edge detection/debouncing
+     * Parameters:
+     *   pin: GPIO pin number
+     *   mode: 0=Normal, 1=Edge detect, 2=Debounce
+     * Returns:
+     *   Pin state (0 or 1)
+     */
+    if(mode == 1) {
+        // Edge detection logic
         if(((sio_hw->gpio_in >> pin) & 1) != last_debounce_state[pin]){
             last_debounce_state[pin] = (sio_hw->gpio_in >> pin) & 1;
             return last_debounce_state[pin];
@@ -138,7 +156,7 @@ void begin_systick(uint32_t reload){
     return;
 }
 
-//Delay ara
+
 void delay(uint32_t tiempo){
     uint32_t a = timer_hw->timelr;
     while((tiempo+a) > timer_hw->timelr){}

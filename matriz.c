@@ -1,3 +1,9 @@
+/**
+ * Button Matrix Handler
+ * -------------------
+ * Implements button matrix scanning and debouncing logic for the input device.
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -8,22 +14,39 @@
 #include "pico/stdlib.h"
 #include "RP2040.h"
 
-uint32_t trigger_buttons = 0, trigger_enc = 0, done = 0;
-uint8_t last_states[24] = {0}, wait = 0, stage = 0;
-uint32_t debounce = 10e3, pressed = 0;
-uint8_t sfc1 = 0, sfc2 = 0, lfc1 = 0, lfc2 = 0;
-uint32_t press1 = 0, press2 = 0;
+/* Matrix Control Variables */
+uint32_t trigger_buttons = 0;   // Timestamp for button debouncing
+uint32_t trigger_enc = 0;       // Timestamp for encoder debouncing
+uint32_t done = 0;             // Scan completion flag
+uint8_t last_states[24] = {0}; // Previous button states
+uint8_t wait = 0;              // Delay counter
+uint8_t stage = 0;             // Current scan stage
 
+/* Button State Variables */
+uint8_t sfc1 = 0;              // Current state of first final control
+uint8_t sfc2 = 0;              // Current state of second final control
+uint8_t lfc1 = 0;              // Last state of first final control
+uint8_t lfc2 = 0;              // Last state of second final control
+uint32_t press1 = 0;           // Timestamp of first button press
+uint32_t press2 = 0;           // Timestamp of second button press
 
-uint32_t readMatrix(uint8_t buttons[], uint8_t edges[], uint8_t menu){
-    switch (stage){
+uint32_t readMatrix(uint8_t buttons[], uint8_t edges[], uint8_t menu) {
+    /* Scan button matrix and update states
+     * Parameters:
+     *   buttons[]: Array to store button states
+     *   edges[]: Array to store edge detection states
+     *   menu: Current menu state
+     * Returns:
+     *   pressed: Bitmap of currently pressed buttons
+     */
+    switch (stage) {
         case 0:
             writePin(COLUMN1,0,1);
             writePin(COLUMN2,0,0);
             writePin(COLUMN3,0,0);
             writePin(COLUMN4,0,0);
             stage = 1;
-        break;
+            break;
 
         case 1:
             if(wait == 4){
@@ -31,7 +54,7 @@ uint32_t readMatrix(uint8_t buttons[], uint8_t edges[], uint8_t menu){
                 wait = 0;
             }
             else wait++;
-        break;
+            break;
         
         case 2:
             buttons[1] = readPin(ROW1, 0);
@@ -43,7 +66,7 @@ uint32_t readMatrix(uint8_t buttons[], uint8_t edges[], uint8_t menu){
             writePin(COLUMN3,0,0);
             writePin(COLUMN4,0,0);
             stage = 3;
-        break;
+            break;
 
         case 3:
             if(wait == 4){
@@ -51,7 +74,7 @@ uint32_t readMatrix(uint8_t buttons[], uint8_t edges[], uint8_t menu){
                 wait = 0;
             }
             else wait++;
-        break;
+            break;
         
         case 4:          
             buttons[2] = readPin(ROW1, 0) & !menu;
@@ -63,7 +86,7 @@ uint32_t readMatrix(uint8_t buttons[], uint8_t edges[], uint8_t menu){
             writePin(COLUMN3,0,1);
             writePin(COLUMN4,0,0);
             stage = 5;
-        break;
+            break;
 
         case 5:
             if(wait == 4){
@@ -71,7 +94,7 @@ uint32_t readMatrix(uint8_t buttons[], uint8_t edges[], uint8_t menu){
                 wait = 0;
             }
             else wait++;
-        break;
+            break;
 
         case 6:  
             buttons[3] = readPin(ROW1, 0) & !menu;
@@ -83,7 +106,7 @@ uint32_t readMatrix(uint8_t buttons[], uint8_t edges[], uint8_t menu){
             writePin(COLUMN3,0,0);
             writePin(COLUMN4,0,1);
             stage = 7;
-        break;
+            break;
 
         case 7:
             if(wait == 4){
@@ -91,7 +114,7 @@ uint32_t readMatrix(uint8_t buttons[], uint8_t edges[], uint8_t menu){
                 wait = 0;
             }
             else wait++;
-        break;
+            break;
         
         case 8:
             buttons[4] = readPin(ROW1, 0) & !menu;
@@ -100,7 +123,7 @@ uint32_t readMatrix(uint8_t buttons[], uint8_t edges[], uint8_t menu){
                 
             stage = 0;
             done = 1;
-        break;
+            break;
 
     }
 
@@ -145,9 +168,11 @@ uint32_t readMatrix(uint8_t buttons[], uint8_t edges[], uint8_t menu){
         done = 0;
     }
 
+    // Update final control states
     sfc1 = readPin(fc1, 0);
     sfc2 = readPin(fc2, 0);
 
+    // Handle button press events with debouncing
     if((sfc1 != lfc1) && ((press1 + 10e3) < timer_hw->timelr)){
         press1 = timer_hw->timelr;
         lfc1 = sfc1;
